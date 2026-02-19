@@ -70,6 +70,10 @@ async function sendTelegramNotification(data: {
   name?: string;
   email?: string;
 }): Promise<boolean> {
+  console.log('TELEGRAM_BOT_TOKEN exists:', !!TELEGRAM_BOT_TOKEN);
+  console.log('TELEGRAM_NOTIFICATION_CHAT_ID exists:', !!TELEGRAM_NOTIFICATION_CHAT_ID);
+  console.log('TELEGRAM_NOTIFICATION_CHAT_ID value:', TELEGRAM_NOTIFICATION_CHAT_ID);
+
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_NOTIFICATION_CHAT_ID) {
     console.warn('Telegram notification not configured');
     return false;
@@ -89,27 +93,32 @@ ${escapeHtml(data.message)}
   `.trim();
 
   try {
-    const response = await fetch(
-      `${TELEGRAM_API_URL}${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_NOTIFICATION_CHAT_ID,
-          text: formattedMessage,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        }),
-      }
-    );
+    const url = `${TELEGRAM_API_URL}${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    console.log('Sending Telegram request to:', url.replace(TELEGRAM_BOT_TOKEN!, '***TOKEN***'));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_NOTIFICATION_CHAT_ID,
+        text: formattedMessage,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
+
+    console.log('Telegram response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('Telegram notification failed:', errorData);
       return false;
     }
+
+    const responseData = await response.json();
+    console.log('Telegram response:', responseData);
 
     return true;
   } catch (error) {
@@ -175,6 +184,16 @@ export async function POST(request: NextRequest) {
       notificationSent,
       timestamp: new Date().toISOString(),
     });
+
+    if (!notificationSent) {
+      return NextResponse.json<SubmissionResponse>(
+        {
+          success: false,
+          message: 'Failed to send notification. Please try again later.',
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json<SubmissionResponse>(
       {
