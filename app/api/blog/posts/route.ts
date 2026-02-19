@@ -13,9 +13,18 @@ import { z } from 'zod';
 const getPostsQuerySchema = z.object({
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(50).optional().default(10),
-  search: z.string().max(100).optional().nullable().default(undefined),
-  tag: z.string().max(50).optional().nullable().default(undefined),
-  slug: z.string().optional().nullable().default(undefined),
+  search: z.preprocess(
+    (val) => (val === null ? undefined : val),
+    z.string().max(100).optional()
+  ),
+  tag: z.preprocess(
+    (val) => (val === null ? undefined : val),
+    z.string().max(50).optional()
+  ),
+  slug: z.preprocess(
+    (val) => (val === null ? undefined : val),
+    z.string().optional()
+  ),
 });
 
 /**
