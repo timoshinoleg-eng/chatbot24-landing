@@ -3,16 +3,10 @@
   "version": 2,
   "name": "chatbot24",
   "regions": ["fra1"],
-  "buildCommand": "next build",
+  "buildCommand": "prisma generate && next build",
   "devCommand": "next dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/cron/sync-telegram",
-      "schedule": "0 * * * *"
-    }
-  ],
   "functions": {
     "app/api/**/*.ts": {
       "maxDuration": 30
@@ -23,41 +17,14 @@
   },
   "rewrites": [
     {
-      "source": "/api/cron/:path*",
-      "destination": "/api/cron/:path*"
-    },
-    {
       "source": "/sitemap.xml",
-      "destination": "/api/sitemap"
-    },
-    {
-      "source": "/rss.xml",
-      "destination": "/api/rss"
-    },
-    {
-      "source": "/feed",
-      "destination": "/api/rss"
+      "destination": "/sitemap"
     }
   ],
   "redirects": [
     {
       "source": "/admin",
       "destination": "/admin/dashboard",
-      "permanent": true
-    },
-    {
-      "source": "/p/:slug",
-      "destination": "/posts/:slug",
-      "permanent": true
-    },
-    {
-      "source": "/blog/:slug",
-      "destination": "/posts/:slug",
-      "permanent": true
-    },
-    {
-      "source": "/article/:slug",
-      "destination": "/posts/:slug",
       "permanent": true
     }
   ],
@@ -68,23 +35,6 @@
         {
           "key": "Cache-Control",
           "value": "no-store, no-cache, must-revalidate, proxy-revalidate"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
-        }
-      ]
-    },
-    {
-      "source": "/static/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=31536000, immutable"
         }
       ]
     },
@@ -96,24 +46,10 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
-    },
-    {
-      "source": "/images/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
     }
   ],
   "github": {
-    "enabled": false
-  },
-  "git": {
-    "deploymentEnabled": {
-      "main": true,
-      "develop": false
-    }
+    "enabled": true,
+    "silent": false
   }
 }
