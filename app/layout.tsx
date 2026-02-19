@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "ChatBot24" }],
   creator: "ChatBot24",
-  metadataBase: new URL("https://chatbot24.ru"),
+  metadataBase: new URL("https://chatbot24.su"),
   openGraph: {
     type: "website",
     locale: "ru_RU",
@@ -41,6 +41,11 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 // JSON-LD Organization Schema
@@ -50,11 +55,11 @@ const organizationSchema = {
   name: "ChatBot24 Studio",
   url: "https://chatbot24.ru",
   logo: "https://chatbot24.ru/logo.png",
-  sameAs: ["https://t.me/chatbot24_bot"],
+  sameAs: ["https://t.me/ChatBot24su_bot"],
   contactPoint: {
     "@type": "ContactPoint",
     contactType: "customer service",
-    email: "info@chatbot24.ru",
+    email: "info@chatbot24.su",
     availableLanguage: ["Russian"],
   },
   description:

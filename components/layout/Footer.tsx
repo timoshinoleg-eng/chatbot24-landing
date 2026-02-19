@@ -24,8 +24,8 @@ interface ContactLink {
 
 const contactLinks: ContactLink[] = [
   {
-    label: '@chatbot24_bot',
-    href: 'https://t.me/chatbot24_bot',
+    label: '@ChatBot24su_bot',
+    href: 'https://t.me/ChatBot24su_bot',
     icon: (
       <svg
         width="20"
@@ -39,8 +39,8 @@ const contactLinks: ContactLink[] = [
     ),
   },
   {
-    label: 'info@chatbot24.ru',
-    href: 'mailto:info@chatbot24.ru',
+    label: 'info@chatbot24.su',
+    href: 'mailto:info@chatbot24.su',
     icon: (
       <svg
         width="20"
