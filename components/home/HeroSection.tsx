@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/Button";
 import { Bot, Play, Shield, ArrowRight, Sparkles } from "lucide-react";
 
 export function HeroSection() {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true); // Changed to true for SSR
 
   useEffect(() => {
+    // Animation already visible, no need to change
     setIsVisible(true);
   }, []);
 
@@ -56,21 +57,13 @@ export function HeroSection() {
       {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
         {/* Badge */}
-        <div 
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface/80 border border-primary/20 mb-8 transition-all duration-700 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface/80 border border-primary/20 mb-8 animate-fade-in-up">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-sm text-text-secondary">AI-автоматизация для бизнеса</span>
         </div>
 
         {/* Main Headline */}
-        <h1 
-          className={`text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 transition-all duration-700 delay-100 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 animate-fade-in-up animation-delay-100">
           <span className="text-text-primary">Автоматизируй </span>
           <span className="text-gradient">продажи</span>
           <br />
@@ -78,22 +71,14 @@ export function HeroSection() {
         </h1>
 
         {/* Subtitle with SEO keywords */}
-        <p 
-          className={`text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-4 transition-all duration-700 delay-200 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <p className="text-lg sm:text-xl text-text-secondary max-w-2xl mx-auto mb-4 animate-fade-in-up animation-delay-200">
           Внедрение чат-ботов для бизнеса любого масштаба. 
           Автоматизация бизнеса ИИ: от первого сообщения до продажи — 
           без участия менеджеров 24/7.
         </p>
 
         {/* Trust Badge */}
-        <div 
-          className={`flex items-center justify-center gap-2 mb-10 transition-all duration-700 delay-300 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <div className="flex items-center justify-center gap-2 mb-10 animate-fade-in-up animation-delay-300">
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent-green/10 border border-accent-green/30">
             <Bot className="w-4 h-4 text-accent-green" />
             <span className="text-sm font-medium text-accent-green">Бот работает 24/7</span>
@@ -105,11 +90,7 @@ export function HeroSection() {
         </div>
 
         {/* CTA Buttons */}
-        <div 
-          className={`flex flex-col sm:flex-row items-center justify-center gap-4 transition-all duration-700 delay-400 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up animation-delay-400">
           <Button
             size="lg"
             onClick={() => scrollToSection("cta")}
@@ -130,11 +111,7 @@ export function HeroSection() {
         </div>
 
         {/* Stats */}
-        <div 
-          className={`grid grid-cols-3 gap-8 max-w-lg mx-auto mt-16 pt-16 border-t border-text-muted/10 transition-all duration-700 delay-500 ${
-            isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}
-        >
+        <div className="grid grid-cols-3 gap-8 max-w-lg mx-auto mt-16 pt-16 border-t border-text-muted/10 animate-fade-in-up animation-delay-500">
           <div className="text-center">
             <div className="text-2xl sm:text-3xl font-bold text-gradient">50+</div>
             <div className="text-sm text-text-muted mt-1">Реализованных ботов</div>
@@ -148,12 +125,12 @@ export function HeroSection() {
             <div className="text-sm text-text-muted mt-1">Средний срок запуска</div>
           </div>
         </div>
-      </div>
 
-      {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-        <div className="w-6 h-10 rounded-full border-2 border-text-muted/30 flex items-start justify-center p-2">
-          <div className="w-1 h-2 bg-text-muted rounded-full animate-pulse" />
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <div className="w-6 h-10 rounded-full border-2 border-text-muted/30 flex items-start justify-center p-2">
+            <div className="w-1 h-2 bg-text-muted rounded-full animate-pulse" />
+          </div>
         </div>
       </div>
     </section>
