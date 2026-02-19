@@ -11,8 +11,14 @@ import { z } from 'zod';
 
 // Validation schemas
 const getPostsQuerySchema = z.object({
-  page: z.coerce.number().int().positive().optional().default(1),
-  limit: z.coerce.number().int().positive().max(50).optional().default(10),
+  page: z.preprocess(
+    (val) => (val === null || val === undefined ? 1 : Number(val)),
+    z.number().int().positive()
+  ),
+  limit: z.preprocess(
+    (val) => (val === null || val === undefined ? 10 : Number(val)),
+    z.number().int().positive().max(50)
+  ),
   search: z.preprocess(
     (val) => (val === null ? undefined : val),
     z.string().max(100).optional()
