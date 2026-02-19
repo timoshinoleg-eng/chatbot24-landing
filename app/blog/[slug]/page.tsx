@@ -36,18 +36,24 @@ interface RelatedPost {
 
 // Generate static params for all published posts
 export async function generateStaticParams() {
-  const posts = await prisma.post.findMany({
-    where: {
-      status: PostStatus.PUBLISHED,
-    },
-    select: {
-      slug: true,
-    },
-  });
+  try {
+    const posts = await prisma.post.findMany({
+      where: {
+        status: PostStatus.PUBLISHED,
+      },
+      select: {
+        slug: true,
+      },
+    });
 
-  return posts.map((post) => ({
-    slug: post.slug,
-  }));
+    return posts.map((post) => ({
+      slug: post.slug,
+    }));
+  } catch (error) {
+    console.error('Failed to fetch posts for static generation:', error);
+    // Return empty array if DB is not available (build will skip static generation)
+    return [];
+  }
 }
 
 // Generate metadata for SEO
@@ -258,7 +264,7 @@ export default async function BlogPostPage({
       <SEOHead
         title={post.metaTitle || post.rewrittenTitle}
         description={post.metaDescription || post.summary}
-        article
+        ogType="article"
         publishedAt={publishDate.toISOString()}
         modifiedAt={post.updatedAt.toISOString()}
         tags={post.tags}

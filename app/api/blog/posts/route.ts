@@ -108,7 +108,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Build where clause for list query
-    const where: Parameters<typeof prisma.post.findMany>[0]['where'] = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {
       status: PostStatus.PUBLISHED,
     };
 

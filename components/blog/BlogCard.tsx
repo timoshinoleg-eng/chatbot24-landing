@@ -28,6 +28,8 @@ interface BlogCardProps {
   readingTime?: number;
   /** Custom className */
   className?: string;
+  /** Custom inline styles */
+  style?: React.CSSProperties;
 }
 
 // ============================================
@@ -103,6 +105,7 @@ export function BlogCard({
   date,
   readingTime,
   className,
+  style,
 }: BlogCardProps) {
   const formattedDate = formatDate(date);
 
@@ -116,6 +119,7 @@ export function BlogCard({
         'hover:border-white/10 hover:shadow-xl hover:shadow-black/20',
         className
       )}
+      style={style}
     >
       <Link href={`/blog/${slug}`} className="block">
         {/* Image Container */}

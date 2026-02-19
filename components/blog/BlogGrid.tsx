@@ -137,7 +137,7 @@ export function BlogGrid({
           )}
           style={{
             animationDelay: `${index * 100}ms`,
-          } as React.CSSProperties}
+          }}
         />
       ))}
     </div>

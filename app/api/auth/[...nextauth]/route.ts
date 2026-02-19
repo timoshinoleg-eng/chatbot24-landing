@@ -5,7 +5,10 @@
  */
 
 import NextAuth from 'next-auth';
+import type { NextAuthConfig, Session, User } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
 import GitHub from 'next-auth/providers/github';
+import type { GitHubProfile } from 'next-auth/providers/github';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
@@ -16,7 +19,7 @@ const ADMIN_GITHUB_USERNAME = process.env.ADMIN_GITHUB_USERNAME;
 /**
  * NextAuth configuration options
  */
-export const authOptions = {
+const authOptions: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
   providers: [
     GitHub({
@@ -30,7 +33,7 @@ export const authOptions = {
     }),
   ],
   session: {
-    strategy: 'database' as const,
+    strategy: 'database',
     maxAge: 30 * 24 * 60 * 60, // 30 days
     updateAge: 24 * 60 * 60, // 24 hours
   },
@@ -52,7 +55,7 @@ export const authOptions = {
       }
 
       // Get GitHub username from profile
-      const githubUsername = profile?.login as string | undefined;
+      const githubUsername = (profile as unknown as GitHubProfile)?.login;
 
       if (!githubUsername) {
         console.warn('Sign-in rejected: could not get GitHub username');
@@ -72,12 +75,14 @@ export const authOptions = {
     /**
      * Session callback - adds user role to session
      */
-    async session({ session, user }) {
+    async session({ session, user }: { session: Session; user: User }) {
       if (session.user) {
         // Add user ID
-        session.user.id = user.id;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).id = user.id;
         // Add user role from database
-        session.user.role = (user as { role: UserRole }).role;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (session.user as any).role = (user as any).role;
       }
       return session;
     },
@@ -86,10 +91,10 @@ export const authOptions = {
      * JWT callback (used when session strategy is 'jwt')
      * Note: We use database strategy, but this is here for flexibility
      */
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT; user?: User }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as { role: UserRole }).role;
+        token.role = (user as unknown as { role: UserRole }).role;
       }
       return token;
     },
@@ -98,7 +103,7 @@ export const authOptions = {
     /**
      * Create user event - automatically set admin role
      */
-    async createUser({ user }) {
+    async createUser({ user }: { user: User }) {
       try {
         // Update the newly created user to have ADMIN role
         await prisma.user.update({
@@ -112,8 +117,8 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: '/auth/signin',
-    error: '/auth/error',
+    signIn: '/admin/login',
+    error: '/admin/login',
   },
   debug: process.env.NODE_ENV === 'development',
 };
@@ -123,4 +128,8 @@ export const authOptions = {
  */
 const handler = NextAuth(authOptions);
 
-export { handler as GET, handler as POST };
+// Export as unknown first to avoid TypeScript issues with Next.js 14
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const GET = handler as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any  
+export const POST = handler as any;

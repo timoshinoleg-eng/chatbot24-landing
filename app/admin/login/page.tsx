@@ -1,11 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export default function AdminLoginPage() {
+function LoginContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -183,5 +184,20 @@ export default function AdminLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+        <div className="flex items-center gap-3 text-text-secondary">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          Загрузка...
+        </div>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

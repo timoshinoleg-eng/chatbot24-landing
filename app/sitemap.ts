@@ -2,6 +2,9 @@ import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { PostStatus } from "@prisma/client";
 
+// Force dynamic rendering to avoid DB errors during static generation
+export const dynamic = 'force-dynamic';
+
 // Base URL for the site
 const BASE_URL = "https://chatbot24.ru";
 
