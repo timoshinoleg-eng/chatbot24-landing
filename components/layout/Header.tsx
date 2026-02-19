@@ -184,7 +184,7 @@ function MobileMenu({
 
           {/* CTA Button */}
           <div className="mt-auto">
-            <Button href="/order" variant="primary" size="lg" glow className="w-full">
+            <Button href="https://t.me/ChatBot24su_bot?start=landing" variant="primary" size="lg" glow className="w-full">
               Заказать бота
             </Button>
           </div>
@@ -255,7 +255,7 @@ export function Header({ className }: HeaderProps) {
 
             {/* Desktop CTA */}
             <div className="hidden lg:block">
-              <Button href="/order" variant="primary" size="md" glow>
+              <Button href="https://t.me/ChatBot24su_bot?start=landing" variant="primary" size="md" glow>
                 Заказать бота
               </Button>
             </div>
