@@ -5,3 +5,6 @@ export { HowItWorksSection } from "./HowItWorksSection";
 export { IntegrationsSection } from "./IntegrationsSection";
 export { FAQSection } from "./FAQSection";
 export { CTASection } from "./CTASection";
+export { default as InteractiveChatDemo } from "./InteractiveChatDemo";
+export { default as CaseStudies } from "./CaseStudies";
+export { default as Marquee } from "./Marquee";

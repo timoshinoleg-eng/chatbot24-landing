@@ -8,6 +8,8 @@ import {
   IntegrationsSection,
   FAQSection,
   CTASection,
+  CaseStudies,
+  Marquee,
 } from "@/components/home";
 import { BlogGrid } from "@/components/blog/BlogGrid";
 import Link from "next/link";
@@ -71,8 +73,14 @@ export default async function HomePage() {
       {/* Hero Section */}
       <HeroSection />
 
+      {/* Marquee Testimonials */}
+      <Marquee />
+
       {/* Scenarios Section */}
       <ScenariosSection />
+
+      {/* Case Studies */}
+      <CaseStudies />
 
       {/* Features Section */}
       <FeaturesSection />
