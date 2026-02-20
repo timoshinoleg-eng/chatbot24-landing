@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface Message {
@@ -20,11 +20,14 @@ export default function AIChatDemo() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
+  // Автоскролл вниз при новых сообщениях
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
+  }, [messages, isLoading])
 
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return
@@ -53,12 +56,20 @@ export default function AIChatDemo() {
       })
 
       const data = await response.json()
+      console.log('API response:', data) // Для отладки
+
+      // Проверяем, что ответ не пустой
+      const botContent = data.message?.trim() || data.content?.trim()
+      
+      if (!botContent) {
+        throw new Error('Empty response from API')
+      }
 
       // Добавляем ответ бота
       const botMessage: Message = {
         id: `bot-${Date.now()}`,
         role: 'assistant',
-        content: data.message || 'Извините, произошла ошибка. Попробуйте позже.',
+        content: botContent,
       }
       setMessages((prev) => [...prev, botMessage])
 
@@ -66,7 +77,7 @@ export default function AIChatDemo() {
       if (content.toLowerCase().includes('бриф') || 
           content.toLowerCase().includes('консультация') ||
           content.toLowerCase().includes('демо') ||
-          data.message.toLowerCase().includes('бриф')) {
+          botContent.toLowerCase().includes('бриф')) {
         setIsCompleted(true)
       }
 
@@ -75,12 +86,11 @@ export default function AIChatDemo() {
       const errorMessage: Message = {
         id: `bot-${Date.now()}`,
         role: 'assistant',
-        content: 'Извините, произошла ошибка. Попробуйте позже или свяжитесь с нами напрямую.',
+        content: 'Извините, произошла ошибка соединения. Попробуйте позже или свяжитесь с нами напрямую.',
       }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
-      setTimeout(scrollToBottom, 100)
     }
   }
 
@@ -110,7 +120,7 @@ export default function AIChatDemo() {
   return (
     <div className="w-full max-w-[400px] h-[550px] bg-surface rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-white/10">
       {/* Header */}
-      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center gap-3">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center gap-3 flex-shrink-0">
         <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -137,14 +147,17 @@ export default function AIChatDemo() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background">
-        <AnimatePresence mode="popLayout">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0"
+      >
+        <AnimatePresence initial={false}>
           {messages.map((message) => (
             <motion.div
               key={message.id}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.3, ease: 'easeOut' }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
@@ -163,7 +176,6 @@ export default function AIChatDemo() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
               className="flex justify-start"
             >
               <div className="bg-surface border border-white/10 rounded-2xl rounded-tl-none px-4 py-3">
@@ -175,12 +187,11 @@ export default function AIChatDemo() {
               </div>
             </motion.div>
           )}
-          <div ref={messagesEndRef} />
         </AnimatePresence>
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-surface border-t border-white/10">
+      <div className="p-4 bg-surface border-t border-white/10 flex-shrink-0">
         {!isCompleted ? (
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <input
@@ -194,7 +205,7 @@ export default function AIChatDemo() {
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+              className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity flex-shrink-0"
             >
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
