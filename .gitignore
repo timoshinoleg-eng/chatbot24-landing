@@ -58,3 +58,4 @@ prisma/*.db-journal
 .Trashes
 ehthumbs.db
 Desktop.ini
+.env*.local

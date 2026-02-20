@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions';
-const GIGACHAT_TOKEN_URL = 'https://ngw.devices.sberbank.ru:9443/api/v2/oauth';
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Системный промт для бота
 const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продающий чат-ботов и автоматизацию для B2B.
@@ -34,47 +33,21 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продаю
 
 Если вопрос сложный — предложи живого специалиста.`;
 
-// Получение токена GigaChat
-async function getGigaChatToken(): Promise<string> {
-  const authKey = process.env.GIGACHAT_AUTH_KEY;
-  
-  if (!authKey) {
-    throw new Error('GIGACHAT_AUTH_KEY not configured');
-  }
-
-  const response = await fetch(GIGACHAT_TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-      'RqUID': crypto.randomUUID(),
-      'Authorization': `Basic ${authKey}`,
-    },
-    body: 'scope=GIGACHAT_API_PERS',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Token request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.access_token;
-}
-
-// Отправка сообщения в GigaChat
-async function sendToGigaChat(
+// Отправка сообщения в OpenRouter
+async function sendToOpenRouter(
   messages: Array<{ role: string; content: string }>,
-  token: string
+  apiKey: string
 ): Promise<string> {
-  const response = await fetch(GIGACHAT_API_URL, {
+  const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://chatbot24.su',
+      'X-Title': 'ChatBot24',
     },
     body: JSON.stringify({
-      model: 'GigaChat',
+      model: 'anthropic/claude-3.5-sonnet', // или 'openai/gpt-4o', 'meta-llama/llama-3.1-70b'
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -85,6 +58,8 @@ async function sendToGigaChat(
   });
 
   if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('OpenRouter error:', errorData);
     throw new Error(`Chat request failed: ${response.status}`);
   }
 
@@ -104,11 +79,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Получаем токен
-    const token = await getGigaChatToken();
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey) {
+      console.error('OPENROUTER_API_KEY not configured');
+      return NextResponse.json({
+        success: true,
+        message: 'Спасибо за интерес! Чтобы дать точный ответ, подключу специалиста. Оставьте контакт — он свяжется в течение часа.',
+        fallback: true,
+      });
+    }
 
-    // Отправляем запрос в GigaChat
-    const reply = await sendToGigaChat(messages, token);
+    // Отправляем запрос в OpenRouter
+    const reply = await sendToOpenRouter(messages, apiKey);
 
     return NextResponse.json({ 
       success: true, 
@@ -116,9 +99,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('GigaChat API error:', error);
+    console.error('OpenRouter API error:', error);
     
-    // Fallback: если GigaChat недоступен, возвращаем заглушку
+    // Fallback
     return NextResponse.json({
       success: true,
       message: 'Спасибо за интерес! Чтобы дать точный ответ, подключу специалиста. Оставьте контакт — он свяжется в течение часа.',
