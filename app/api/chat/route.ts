@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import https from 'https';
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GIGACHAT_API_URL = 'gigachat.devices.sberbank.ru';
+const GIGACHAT_TOKEN_URL = 'ngw.devices.sberbank.ru';
+
+// Загружаем сертификат Минцифры
+let caCert: Buffer | undefined;
+try {
+  const certPath = join(process.cwd(), 'russian_trusted_root_ca_pem.crt');
+  caCert = readFileSync(certPath);
+  console.log('Certificate loaded successfully');
+} catch (error) {
+  console.error('Failed to load certificate:', error);
+}
+
+// Создаем HTTPS агент с сертификатом
+const httpsAgent = caCert 
+  ? new https.Agent({ ca: caCert })
+  : undefined;
 
 // Системный промт для бота
 const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продающий чат-ботов и автоматизацию для B2B.
@@ -33,21 +52,88 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продаю
 
 Если вопрос сложный — предложи живого специалиста.`;
 
-// Отправка сообщения в OpenRouter
-async function sendToOpenRouter(
+// Функция для fetch с кастомным HTTPS агентом
+async function fetchWithCert(url: string, options: RequestInit): Promise<Response> {
+  if (httpsAgent && url.startsWith('https://')) {
+    // Используем нативный https модуль
+    return new Promise((resolve, reject) => {
+      const urlObj = new URL(url);
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname + urlObj.search,
+        method: options.method || 'GET',
+        headers: options.headers as Record<string, string>,
+        agent: httpsAgent,
+      };
+
+      const req = https.request(requestOptions, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          resolve(new Response(data, {
+            status: res.statusCode,
+            headers: new Headers(Object.entries(res.headers as Record<string, string>)),
+          }));
+        });
+      });
+
+      req.on('error', reject);
+      
+      if (options.body) {
+        req.write(options.body);
+      }
+      
+      req.end();
+    });
+  }
+  
+  return fetch(url, options);
+}
+
+// Получение токена GigaChat
+async function getGigaChatToken(): Promise<string> {
+  const authKey = process.env.GIGACHAT_AUTH_KEY;
+  
+  if (!authKey) {
+    throw new Error('GIGACHAT_AUTH_KEY not configured');
+  }
+
+  const response = await fetchWithCert(`https://${GIGACHAT_TOKEN_URL}:9443/api/v2/oauth`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+      'RqUID': crypto.randomUUID(),
+      'Authorization': `Basic ${authKey}`,
+    },
+    body: 'scope=GIGACHAT_API_PERS',
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Token request failed:', response.status, errorText);
+    throw new Error(`Token request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+// Отправка сообщения в GigaChat
+async function sendToGigaChat(
   messages: Array<{ role: string; content: string }>,
-  apiKey: string
+  token: string
 ): Promise<string> {
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetchWithCert(`https://${GIGACHAT_API_URL}/api/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'https://chatbot24.su',
-      'X-Title': 'ChatBot24',
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify({
-      model: 'anthropic/claude-3.5-sonnet', // или 'openai/gpt-4o', 'meta-llama/llama-3.1-70b'
+      model: 'GigaChat',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -58,8 +144,8 @@ async function sendToOpenRouter(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    console.error('OpenRouter error:', errorData);
+    const errorText = await response.text();
+    console.error('Chat request failed:', response.status, errorText);
     throw new Error(`Chat request failed: ${response.status}`);
   }
 
@@ -79,19 +165,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    
-    if (!apiKey) {
-      console.error('OPENROUTER_API_KEY not configured');
-      return NextResponse.json({
-        success: true,
-        message: 'Спасибо за интерес! Чтобы дать точный ответ, подключу специалиста. Оставьте контакт — он свяжется в течение часа.',
-        fallback: true,
-      });
-    }
+    console.log('Certificate loaded:', !!caCert);
+    console.log('HTTPS Agent:', !!httpsAgent);
 
-    // Отправляем запрос в OpenRouter
-    const reply = await sendToOpenRouter(messages, apiKey);
+    // Получаем токен
+    const token = await getGigaChatToken();
+    console.log('Token received:', !!token);
+
+    // Отправляем запрос в GigaChat
+    const reply = await sendToGigaChat(messages, token);
+    console.log('Reply received:', reply.substring(0, 100));
 
     return NextResponse.json({ 
       success: true, 
@@ -99,13 +182,13 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('OpenRouter API error:', error);
+    console.error('GigaChat API error:', error);
     
-    // Fallback
     return NextResponse.json({
       success: true,
       message: 'Спасибо за интерес! Чтобы дать точный ответ, подключу специалиста. Оставьте контакт — он свяжется в течение часа.',
       fallback: true,
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }
