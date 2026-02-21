@@ -174,26 +174,41 @@ export default function AIChatDemo() {
     }
   }, [messages, isLoading, currentStep])
 
-  const handleQuickReply = (reply: string) => {
+  const handleQuickReply = useCallback((reply: string) => {
     if (reply === 'Другое') {
-      sendMessage('Другое', true)
+      // Добавляем сообщение пользователя и показываем поле ввода
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: 'Другое',
+      }
+      setMessages((prev) => [...prev, userMessage])
+      setShowCustomInput(true)
+      setCurrentStep('niche')
     } else if (reply === 'Заполнить бриф') {
       setIsCompleted(true)
       setTimeout(() => {
         document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })
       }, 300)
     } else if (reply === 'Позвоните мне' || reply === 'Написать в Telegram') {
-      setMessages((prev) => [...prev, {
+      // Добавляем сообщение пользователя и ответ бота атомарно
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: reply,
+      }
+      const botMessage: Message = {
         id: `bot-${Date.now()}`,
         role: 'assistant',
         content: `Отлично! Оставьте ваш номер телефона — наш специалист свяжется в течение 15 минут.`,
-      }])
+      }
+      setMessages((prev) => [...prev, userMessage, botMessage])
       setShowCustomInput(true)
       setCurrentStep('contact')
     } else {
       sendMessage(reply)
     }
-  }
+  }, [sendMessage])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
