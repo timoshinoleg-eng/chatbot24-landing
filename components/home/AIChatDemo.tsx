@@ -108,16 +108,30 @@ export default function AIChatDemo() {
           }
         }
 
-        // Добавляем финальное сообщение
-        const botMessage: Message = {
-          id: `bot-${Date.now()}`,
-          role: 'assistant',
-          content: fullContent || 'Извините, не удалось получить ответ.',
+        // Разбиваем длинное сообщение на части
+        const messageParts = splitLongMessage(fullContent)
+        
+        // Добавляем части с небольшой задержкой
+        for (let i = 0; i < messageParts.length; i++) {
+          const part = messageParts[i]
+          const botMessage: Message = {
+            id: `bot-${Date.now()}-${i}`,
+            role: 'assistant',
+            content: part,
+          }
+          
+          if (i === 0) {
+            setMessages((prev) => [...prev, botMessage])
+          } else {
+            // Задержка между сообщениями
+            await new Promise(resolve => setTimeout(resolve, 800))
+            setMessages((prev) => [...prev, botMessage])
+          }
         }
-        setMessages((prev) => [...prev, botMessage])
+        
         setStreamingContent('')
 
-        // Проверяем CTA
+        // Проверяем CTA по полному сообщению
         checkCTA(content, fullContent)
 
       } else {
@@ -130,12 +144,24 @@ export default function AIChatDemo() {
 
         const botContent = data.message || data.content || 'Извините, произошла ошибка.'
         
-        const botMessage: Message = {
-          id: `bot-${Date.now()}`,
-          role: 'assistant',
-          content: botContent,
+        // Разбиваем длинное сообщение на части
+        const messageParts = splitLongMessage(botContent)
+        
+        for (let i = 0; i < messageParts.length; i++) {
+          const part = messageParts[i]
+          const botMessage: Message = {
+            id: `bot-${Date.now()}-${i}`,
+            role: 'assistant',
+            content: part,
+          }
+          
+          if (i === 0) {
+            setMessages((prev) => [...prev, botMessage])
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 800))
+            setMessages((prev) => [...prev, botMessage])
+          }
         }
-        setMessages((prev) => [...prev, botMessage])
 
         checkCTA(content, botContent)
       }
@@ -171,6 +197,36 @@ export default function AIChatDemo() {
         lowerBot.includes('свяжемся')) {
       setIsCompleted(true)
     }
+  }
+
+  // Разбивает длинный текст на несколько сообщений
+  const splitLongMessage = (text: string): string[] => {
+    const maxLength = 200 // Максимальная длина одного сообщения
+    
+    if (text.length <= maxLength) return [text]
+    
+    const parts: string[] = []
+    let currentPart = ''
+    
+    // Разбиваем по предложениям
+    const sentences = text.split(/(?<=[.!?])\s+/)
+    
+    for (const sentence of sentences) {
+      if ((currentPart + sentence).length <= maxLength) {
+        currentPart += sentence + ' '
+      } else {
+        if (currentPart.trim()) {
+          parts.push(currentPart.trim())
+        }
+        currentPart = sentence + ' '
+      }
+    }
+    
+    if (currentPart.trim()) {
+      parts.push(currentPart.trim())
+    }
+    
+    return parts.length > 0 ? parts : [text.substring(0, maxLength)]
   }
 
   const handleSubmit = (e: React.FormEvent) => {
