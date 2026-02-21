@@ -1,25 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import https from 'https';
 
-const GIGACHAT_API_URL = 'gigachat.devices.sberbank.ru';
-const GIGACHAT_TOKEN_URL = 'ngw.devices.sberbank.ru';
-
-// Загружаем сертификат Минцифры
-let caCert: Buffer | undefined;
-try {
-  const certPath = join(process.cwd(), 'russian_trusted_root_ca_pem.crt');
-  caCert = readFileSync(certPath);
-  console.log('Certificate loaded successfully');
-} catch (error) {
-  console.error('Failed to load certificate:', error);
-}
-
-// Создаем HTTPS агент с сертификатом
-const httpsAgent = caCert 
-  ? new https.Agent({ ca: caCert })
-  : undefined;
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 // Системный промт для бота
 const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продающий чат-ботов и автоматизацию для B2B.
@@ -52,88 +33,33 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продаю
 
 Если вопрос сложный — предложи живого специалиста.`;
 
-// Функция для fetch с кастомным HTTPS агентом
-async function fetchWithCert(url: string, options: RequestInit): Promise<Response> {
-  if (httpsAgent && url.startsWith('https://')) {
-    // Используем нативный https модуль
-    return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
-        method: options.method || 'GET',
-        headers: options.headers as Record<string, string>,
-        agent: httpsAgent,
-      };
+// Приоритет моделей (от лучшей к запасной)
+const MODELS = [
+  'deepseek/deepseek-r1-0528:free',      // Лучшая для русского и B2B
+  'meta-llama/llama-3.3-70b-instruct:free', // Большая, умная
+  'qwen/qwen3-next-80b-a3b-instruct:free',  // Хорошо следует инструкциям
+];
 
-      const req = https.request(requestOptions, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          resolve(new Response(data, {
-            status: res.statusCode,
-            headers: new Headers(Object.entries(res.headers as Record<string, string>)),
-          }));
-        });
-      });
-
-      req.on('error', reject);
-      
-      if (options.body) {
-        req.write(options.body);
-      }
-      
-      req.end();
-    });
-  }
-  
-  return fetch(url, options);
-}
-
-// Получение токена GigaChat
-async function getGigaChatToken(): Promise<string> {
-  const authKey = process.env.GIGACHAT_AUTH_KEY;
-  
-  if (!authKey) {
-    throw new Error('GIGACHAT_AUTH_KEY not configured');
-  }
-
-  const response = await fetchWithCert(`https://${GIGACHAT_TOKEN_URL}:9443/api/v2/oauth`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-      'RqUID': crypto.randomUUID(),
-      'Authorization': `Basic ${authKey}`,
-    },
-    body: 'scope=GIGACHAT_API_PERS',
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Token request failed:', response.status, errorText);
-    throw new Error(`Token request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.access_token;
-}
-
-// Отправка сообщения в GigaChat
-async function sendToGigaChat(
+// Отправка сообщения в OpenRouter
+async function sendToOpenRouter(
   messages: Array<{ role: string; content: string }>,
-  token: string
-): Promise<string> {
-  const response = await fetchWithCert(`https://${GIGACHAT_API_URL}/api/v1/chat/completions`, {
+  apiKey: string,
+  modelIndex: number = 0
+): Promise<{ content: string; model: string }> {
+  const model = MODELS[modelIndex] || MODELS[0];
+  
+  console.log(`Trying model: ${model}`);
+
+  const response = await fetch(OPENROUTER_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer': 'https://chatbot24.su',
+      'X-Title': 'ChatBot24',
     },
     body: JSON.stringify({
-      model: 'GigaChat',
+      model: model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -144,13 +70,27 @@ async function sendToGigaChat(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Chat request failed:', response.status, errorText);
-    throw new Error(`Chat request failed: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}));
+    console.error(`Model ${model} failed:`, response.status, errorData);
+    
+    // Пробуем следующую модель
+    if (modelIndex < MODELS.length - 1) {
+      console.log('Trying next model...');
+      return sendToOpenRouter(messages, apiKey, modelIndex + 1);
+    }
+    
+    throw new Error(`All models failed. Last error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || 'Извините, произошла ошибка. Попробуйте позже.';
+  const content = data.choices?.[0]?.message?.content;
+  
+  if (!content) {
+    throw new Error('Empty response from API');
+  }
+
+  console.log(`Success with model: ${model}`);
+  return { content, model };
 }
 
 export async function POST(request: NextRequest) {
@@ -165,24 +105,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Certificate loaded:', !!caCert);
-    console.log('HTTPS Agent:', !!httpsAgent);
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    
+    if (!apiKey) {
+      console.error('OPENROUTER_API_KEY not configured');
+      return NextResponse.json({
+        success: true,
+        message: 'Спасибо за интерес! Чтобы дать точный ответ, подключу специалиста. Оставьте контакт — он свяжется в течение часа.',
+        fallback: true,
+      });
+    }
 
-    // Получаем токен
-    const token = await getGigaChatToken();
-    console.log('Token received:', !!token);
+    console.log('=== OpenRouter API Request ===');
+    console.log('Messages count:', messages.length);
 
-    // Отправляем запрос в GigaChat
-    const reply = await sendToGigaChat(messages, token);
-    console.log('Reply received:', reply.substring(0, 100));
+    // Отправляем запрос в OpenRouter с fallback моделями
+    const { content, model } = await sendToOpenRouter(messages, apiKey);
+    
+    console.log('=== Success ===');
+    console.log('Model used:', model);
+    console.log('Response preview:', content.substring(0, 100));
 
     return NextResponse.json({ 
       success: true, 
-      message: reply 
+      message: content,
+      model: model,
     });
 
   } catch (error) {
-    console.error('GigaChat API error:', error);
+    console.error('=== OpenRouter API Error ===');
+    console.error(error);
     
     return NextResponse.json({
       success: true,
