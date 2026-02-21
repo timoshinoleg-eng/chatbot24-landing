@@ -274,7 +274,7 @@ export default function AIChatDemo() {
           <div className="text-center space-y-3">
             <p className="text-sm text-slate-400">Готовы обсудить детали? 👍</p>
             <div className="flex gap-2">
-              <button onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })} className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90">
+              <button onClick={() => { window.location.href = '#contact'; }} className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90">
                 Заполнить бриф
               </button>
               <button onClick={handleReset} className="px-4 py-3 border border-white/10 text-slate-300 text-sm rounded-xl hover:border-indigo-500/50">
