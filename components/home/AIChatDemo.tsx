@@ -57,11 +57,11 @@ export default function AIChatDemo() {
       content,
     }
     
+    // Получаем актуальные сообщения ДО обновления state
+    const currentMessages = [...messages, userMessage]
+    
     // Обновляем UI
-    setMessages((prev) => {
-      const newMessages = [...prev, userMessage]
-      return newMessages
-    })
+    setMessages(currentMessages)
     
     setInput('')
     setShowCustomInput(false)
@@ -75,9 +75,6 @@ export default function AIChatDemo() {
     setIsLoading(true)
 
     try {
-      // Ждём обновления state и берём актуальные сообщения
-      const currentMessages = [...messages, userMessage]
-      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
