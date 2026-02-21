@@ -9,17 +9,29 @@ interface Message {
   content: string
 }
 
+// Кнопки быстрого ответа
+const QUICK_REPLIES: Record<string, string[]> = {
+  welcome: ['B2B', 'HoReCa', 'E-commerce', 'Другое'],
+  niche: ['Интернет-магазин', 'Услуги', 'Образование', 'Производство', 'Другое'],
+  budget: ['До 20 000₽', 'До 50 000₽', 'До 100 000₽', 'До 200 000₽', 'Обсудим'],
+  problem: ['Много вопросов', 'Медленные ответы', 'Нужны лиды', 'Автоматизация'],
+  yesno: ['Да', 'Нет', 'Расскажи подробнее'],
+  contact: ['Заполнить бриф', 'Позвоните мне', 'Написать в Telegram'],
+}
+
 export default function AIChatDemo() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Привет! 👋 За 2 минуты покажу, как не терять лиды и разгрузить отдел продаж без новых наймов. Готов?',
+      content: 'Привет! 👋 За 2 минуты подберём решение для вашего бизнеса. Какая у вас сфера?',
     },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [currentStep, setCurrentStep] = useState<keyof typeof QUICK_REPLIES>('welcome')
+  const [showCustomInput, setShowCustomInput] = useState(false)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Автоскролл вниз
@@ -29,7 +41,26 @@ export default function AIChatDemo() {
     }
   }, [messages, isLoading])
 
-  const sendMessage = useCallback(async (content: string) => {
+  // Определяем следующий шаг на основе ответа
+  const getNextStep = (text: string): keyof typeof QUICK_REPLIES => {
+    const lower = text.toLowerCase()
+    
+    if (currentStep === 'welcome' || currentStep === 'niche') {
+      return 'problem'
+    }
+    if (currentStep === 'problem') {
+      return 'budget'
+    }
+    if (currentStep === 'budget') {
+      return 'contact'
+    }
+    if (currentStep === 'yesno') {
+      return 'contact'
+    }
+    return 'yesno'
+  }
+
+  const sendMessage = useCallback(async (content: string, skipApi = false) => {
     if (!content.trim() || isLoading) return
 
     const userMessage: Message = {
@@ -39,6 +70,19 @@ export default function AIChatDemo() {
     }
     setMessages((prev) => [...prev, userMessage])
     setInput('')
+    setShowCustomInput(false)
+    
+    if (skipApi) {
+      // Для кнопок "Другое" или когда не нужен API
+      const nextStep = getNextStep(content)
+      setCurrentStep(nextStep)
+      
+      if (content === 'Другое') {
+        setShowCustomInput(true)
+      }
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -61,7 +105,6 @@ export default function AIChatDemo() {
 
       const botContent = data.message || 'Извините, произошла ошибка.'
       
-      // Просто добавляем одно сообщение
       const botMessage: Message = {
         id: `bot-${Date.now()}`,
         role: 'assistant',
@@ -69,7 +112,16 @@ export default function AIChatDemo() {
       }
       setMessages((prev) => [...prev, botMessage])
 
-      checkCTA(content, botContent)
+      // Определяем следующий шаг
+      const nextStep = getNextStep(botContent)
+      setCurrentStep(nextStep)
+
+      // Проверяем CTA
+      if (botContent.toLowerCase().includes('бриф') || 
+          botContent.toLowerCase().includes('консультация') ||
+          botContent.toLowerCase().includes('свяжемся')) {
+        setIsCompleted(true)
+      }
 
     } catch (error) {
       console.error('Chat error:', error)
@@ -81,39 +133,49 @@ export default function AIChatDemo() {
     } finally {
       setIsLoading(false)
     }
-  }, [messages, isLoading])
+  }, [messages, isLoading, currentStep])
 
-  const checkCTA = (userContent: string, botContent: string) => {
-    const lowerUser = userContent.toLowerCase()
-    const lowerBot = botContent.toLowerCase()
-    
-    if (lowerUser.includes('бриф') || lowerUser.includes('консультация') ||
-        lowerUser.includes('демо') || lowerBot.includes('бриф') ||
-        lowerBot.includes('заполнить') || lowerBot.includes('свяжемся')) {
+  const handleQuickReply = (reply: string) => {
+    if (reply === 'Другое') {
+      sendMessage('Другое', true)
+    } else if (reply === 'Заполнить бриф') {
       setIsCompleted(true)
+      setTimeout(() => {
+        document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })
+      }, 300)
+    } else if (reply === 'Позвоните мне' || reply === 'Написать в Telegram') {
+      setMessages((prev) => [...prev, {
+        id: `bot-${Date.now()}`,
+        role: 'assistant',
+        content: `Отлично! Оставьте ваш номер телефона — наш специалист свяжется в течение 15 минут.`,
+      }])
+      setShowCustomInput(true)
+      setCurrentStep('contact')
+    } else {
+      sendMessage(reply)
     }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    sendMessage(input)
+    if (input.trim()) {
+      sendMessage(input)
+    }
   }
 
   const handleReset = () => {
     setMessages([{
       id: 'welcome',
       role: 'assistant',
-      content: 'Привет! 👋 За 2 минуты покажу, как не терять лиды и разгрузить отдел продаж без новых наймов. Готов?',
+      content: 'Привет! 👋 За 2 минуты подберём решение для вашего бизнеса. Какая у вас сфера?',
     }])
+    setCurrentStep('welcome')
     setIsCompleted(false)
+    setShowCustomInput(false)
+    setInput('')
   }
 
-  const handleCTA = () => {
-    setIsCompleted(true)
-    setTimeout(() => {
-      document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })
-    }, 500)
-  }
+  const currentButtons = QUICK_REPLIES[currentStep] || QUICK_REPLIES.yesno
 
   return (
     <div className="w-full max-w-[400px] h-[550px] bg-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-white/10">
@@ -175,6 +237,23 @@ export default function AIChatDemo() {
         </AnimatePresence>
       </div>
 
+      {/* Quick Reply Buttons */}
+      {!isCompleted && !isLoading && (
+        <div className="px-4 py-3 bg-slate-900 border-t border-white/5">
+          <div className="flex flex-wrap gap-2">
+            {currentButtons.map((button) => (
+              <button
+                key={button}
+                onClick={() => handleQuickReply(button)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white text-xs font-medium rounded-full border border-white/10 hover:border-indigo-500 transition-all"
+              >
+                {button}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 bg-slate-900 border-t border-white/10 flex-shrink-0">
         {!isCompleted ? (
@@ -183,7 +262,7 @@ export default function AIChatDemo() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Напишите сообщение..."
+              placeholder={showCustomInput ? "Напишите подробнее..." : "Или напишите своё сообщение..."}
               disabled={isLoading}
               className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500/50"
             />
@@ -201,7 +280,7 @@ export default function AIChatDemo() {
           <div className="text-center space-y-3">
             <p className="text-sm text-slate-400">Готовы обсудить детали? 👍</p>
             <div className="flex gap-2">
-              <button onClick={handleCTA} className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90">
+              <button onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })} className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90">
                 Заполнить бриф
               </button>
               <button onClick={handleReset} className="px-4 py-3 border border-white/10 text-slate-300 text-sm rounded-xl hover:border-indigo-500/50">
