@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { readStreamableValue } from 'ai/rsc'
 
 interface Message {
   id: string
@@ -20,17 +21,34 @@ export default function AIChatDemo() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Автоскролл вниз при новых сообщениях
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [messages, isLoading])
+  }, [messages, streamingContent, isLoading])
 
-  const sendMessage = async (content: string) => {
+  // Очистка при размонтировании
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+  const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return
+
+    // Отменяем предыдущий запрос если есть
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
 
     // Добавляем сообщение пользователя
     const userMessage: Message = {
@@ -41,9 +59,9 @@ export default function AIChatDemo() {
     setMessages((prev) => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
+    setStreamingContent('')
 
     try {
-      // Отправляем запрос к API
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,35 +71,80 @@ export default function AIChatDemo() {
             content: m.content,
           })),
         }),
+        signal: abortControllerRef.current.signal,
       })
 
-      const data = await response.json()
-      console.log('API response:', data) // Для отладки
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
-      // Проверяем, что ответ не пустой
-      const botContent = data.message?.trim() || data.content?.trim()
+      const contentType = response.headers.get('content-type')
       
-      if (!botContent) {
-        throw new Error('Empty response from API')
-      }
+      // Проверяем, это streaming или JSON
+      if (contentType?.includes('text/plain') || contentType?.includes('text/event-stream')) {
+        // Streaming response
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let fullContent = ''
 
-      // Добавляем ответ бота
-      const botMessage: Message = {
-        id: `bot-${Date.now()}`,
-        role: 'assistant',
-        content: botContent,
-      }
-      setMessages((prev) => [...prev, botMessage])
+        if (!reader) {
+          throw new Error('No reader available')
+        }
 
-      // Проверяем, не пришло ли время CTA
-      if (content.toLowerCase().includes('бриф') || 
-          content.toLowerCase().includes('консультация') ||
-          content.toLowerCase().includes('демо') ||
-          botContent.toLowerCase().includes('бриф')) {
-        setIsCompleted(true)
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              // Это текстовая часть
+              const text = line.slice(2).replace(/^"|"$/g, '')
+              fullContent += text
+              setStreamingContent(fullContent)
+            }
+          }
+        }
+
+        // Добавляем финальное сообщение
+        const botMessage: Message = {
+          id: `bot-${Date.now()}`,
+          role: 'assistant',
+          content: fullContent || 'Извините, не удалось получить ответ.',
+        }
+        setMessages((prev) => [...prev, botMessage])
+        setStreamingContent('')
+
+        // Проверяем CTA
+        checkCTA(content, fullContent)
+
+      } else {
+        // JSON response (fallback)
+        const data = await response.json()
+        
+        if (data.error) {
+          throw new Error(data.error)
+        }
+
+        const botContent = data.message || data.content || 'Извините, произошла ошибка.'
+        
+        const botMessage: Message = {
+          id: `bot-${Date.now()}`,
+          role: 'assistant',
+          content: botContent,
+        }
+        setMessages((prev) => [...prev, botMessage])
+
+        checkCTA(content, botContent)
       }
 
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return // Пользователь отменил
+      }
+      
       console.error('Chat error:', error)
       const errorMessage: Message = {
         id: `bot-${Date.now()}`,
@@ -91,6 +154,22 @@ export default function AIChatDemo() {
       setMessages((prev) => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+      setStreamingContent('')
+      abortControllerRef.current = null
+    }
+  }, [messages, isLoading])
+
+  const checkCTA = (userContent: string, botContent: string) => {
+    const lowerUser = userContent.toLowerCase()
+    const lowerBot = botContent.toLowerCase()
+    
+    if (lowerUser.includes('бриф') || 
+        lowerUser.includes('консультация') ||
+        lowerUser.includes('демо') ||
+        lowerBot.includes('бриф') ||
+        lowerBot.includes('заполнить') ||
+        lowerBot.includes('свяжемся')) {
+      setIsCompleted(true)
     }
   }
 
@@ -100,6 +179,9 @@ export default function AIChatDemo() {
   }
 
   const handleReset = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
     setMessages([
       {
         id: 'welcome',
@@ -108,6 +190,8 @@ export default function AIChatDemo() {
       },
     ])
     setIsCompleted(false)
+    setStreamingContent('')
+    setIsLoading(false)
   }
 
   const handleCTA = () => {
@@ -161,7 +245,7 @@ export default function AIChatDemo() {
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed ${
+                className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                   message.role === 'assistant'
                     ? 'bg-surface border border-white/10 text-text-primary rounded-2xl rounded-tl-none'
                     : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl rounded-tr-none'
@@ -172,7 +256,22 @@ export default function AIChatDemo() {
             </motion.div>
           ))}
 
-          {isLoading && (
+          {/* Streaming message */}
+          {isLoading && streamingContent && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex justify-start"
+            >
+              <div className="max-w-[90%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-surface border border-white/10 text-text-primary rounded-2xl rounded-tl-none">
+                {streamingContent}
+                <span className="inline-block w-2 h-4 ml-1 bg-indigo-500 animate-pulse" />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Loading indicator (только когда нет streaming) */}
+          {isLoading && !streamingContent && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}

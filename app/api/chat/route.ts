@@ -1,6 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { streamText } from 'ai';
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+// Создаём провайдер OpenRouter
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 // Системный промт для бота
 const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продающий чат-ботов и автоматизацию для B2B.
@@ -11,88 +15,97 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продаю
 - Профессионально, но по-человечески (без канцелярита)
 - Короткие сообщения: 1-3 предложения
 - Лёгкий юмор, но серьёзность
-- Не дави, показывай выгоды`;
+- Не дави, показывай выгоды
 
-export async function POST(request: NextRequest) {
+Ключевые боли B2B:
+1. Лиды теряются, менеджеры долго отвечают
+2. Нужно больше заявок без увеличения трафика
+3. Менеджеры тратят время на рутину
+
+Аргументы:
+- Скорость: ответ за секунды
+- 24/7: работает ночью и в выходные
+- Квалификация: передаёт только тёплых лидов
+- Интеграции: CRM, мессенджеры, сайт
+
+Структура диалога:
+1. Hook: приветствие + сильное обещание
+2. Квалификация: ниша, роль, проблема, объём
+3. Персонализация: как бот решит проблему
+4. Мини-кейс: короткий пример с результатом
+5. CTA: бриф, демо или консультация
+
+Если вопрос сложный — предложи живого специалиста.`;
+
+// Разрешённые модели (приоритет от лучшей)
+const MODELS = [
+  'deepseek/deepseek-r1-0528:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'qwen/qwen3-next-80b-a3b-instruct:free',
+  'openrouter/free', // авто-выбор
+];
+
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { messages } = body;
+    const { messages } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: 'Messages required' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Messages required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    
-    if (!apiKey) {
-      console.error('OPENROUTER_API_KEY not set');
-      return fallbackResponse('API key not configured');
+    // Пробуем модели по порядку
+    for (const modelId of MODELS) {
+      try {
+        console.log(`Trying model: ${modelId}`);
+
+        const result = streamText({
+          model: openrouter(modelId),
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages,
+          ],
+          temperature: 0.7,
+          maxTokens: 500,
+        });
+
+        // Если дошли сюда — модель работает, возвращаем поток
+        return result.toDataStreamResponse({
+          headers: {
+            'X-Model-Used': modelId,
+          },
+        });
+
+      } catch (modelError) {
+        console.warn(`Model ${modelId} failed:`, modelError);
+        // Пробуем следующую модель
+        continue;
+      }
     }
 
-    console.log('Sending request to OpenRouter...');
-
-    // Используем Promise.race для таймаута вместо AbortController
-    const fetchPromise = fetch(OPENROUTER_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://chatbot24.su',
-        'X-Title': 'ChatBot24',
-      },
-      body: JSON.stringify({
-        model: 'openrouter/free',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages,
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-      }),
-    });
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), 10000);
-    });
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('OpenRouter error:', response.status, error);
-      return fallbackResponse(`API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return fallbackResponse('Empty response');
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      message: content,
-      model: data.model,
-    });
+    // Все модели failed — возвращаем fallback
+    return fallbackResponse();
 
   } catch (error) {
-    console.error('Error:', error);
-    
-    if (error instanceof Error && error.message === 'Timeout') {
-      return fallbackResponse('Request timeout');
-    }
-    
-    return fallbackResponse(error instanceof Error ? error.message : 'Unknown error');
+    console.error('API Error:', error);
+    return fallbackResponse();
   }
 }
 
-function fallbackResponse(error: string) {
-  console.log('Fallback triggered:', error);
-  return NextResponse.json({
-    success: true,
-    message: 'Привет! 👋 Я помогу подобрать решение для автоматизации вашего бизнеса.\n\nРасскажите, чем занимается ваша компания? (например: интернет-магазин, услуги, обучение)',
-    fallback: true,
-    error,
-  });
+function fallbackResponse() {
+  const fallbackMessage = 'Привет! 👋 Я помогу подобрать решение для автоматизации вашего бизнеса.\n\nРасскажите, чем занимается ваша компания? (например: интернет-магазин, услуги, обучение)';
+  
+  return new Response(
+    JSON.stringify({
+      success: true,
+      message: fallbackMessage,
+      fallback: true,
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 }

@@ -3,6 +3,9 @@ const nextConfig = {
   // output: 'export', // Disabled for dynamic routes support
   experimental: {
     serverComponentsExternalPackages: ['@vercel/postgres'],
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
   },
   images: {
     remotePatterns: [
