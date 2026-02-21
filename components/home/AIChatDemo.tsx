@@ -9,7 +9,6 @@ interface Message {
   content: string
 }
 
-// Кнопки быстрого ответа
 const QUICK_REPLIES: Record<string, string[]> = {
   welcome: ['B2B', 'HoReCa', 'E-commerce', 'Другое'],
   niche: ['Интернет-магазин', 'Услуги', 'Образование', 'Производство', 'Другое'],
@@ -32,31 +31,20 @@ export default function AIChatDemo() {
   const [isCompleted, setIsCompleted] = useState(false)
   const [currentStep, setCurrentStep] = useState<keyof typeof QUICK_REPLIES>('welcome')
   const [showCustomInput, setShowCustomInput] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
-  // Автоскролл вниз
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [messages, isLoading])
+  }, [messages, streamingText, isLoading])
 
-  // Определяем следующий шаг на основе ответа
   const getNextStep = (text: string): keyof typeof QUICK_REPLIES => {
-    const lower = text.toLowerCase()
-    
-    if (currentStep === 'welcome' || currentStep === 'niche') {
-      return 'problem'
-    }
-    if (currentStep === 'problem') {
-      return 'budget'
-    }
-    if (currentStep === 'budget') {
-      return 'contact'
-    }
-    if (currentStep === 'yesno') {
-      return 'contact'
-    }
+    if (currentStep === 'welcome' || currentStep === 'niche') return 'problem'
+    if (currentStep === 'problem') return 'budget'
+    if (currentStep === 'budget') return 'contact'
+    if (currentStep === 'yesno') return 'contact'
     return 'yesno'
   }
 
@@ -73,17 +61,14 @@ export default function AIChatDemo() {
     setShowCustomInput(false)
     
     if (skipApi) {
-      // Для кнопок "Другое" или когда не нужен API
       const nextStep = getNextStep(content)
       setCurrentStep(nextStep)
-      
-      if (content === 'Другое') {
-        setShowCustomInput(true)
-      }
+      if (content === 'Другое') setShowCustomInput(true)
       return
     }
 
     setIsLoading(true)
+    setStreamingText('')
 
     try {
       const response = await fetch('/api/chat', {
@@ -97,30 +82,69 @@ export default function AIChatDemo() {
         }),
       })
 
-      const data = await response.json()
+      const contentType = response.headers.get('content-type')
       
-      if (data.error) {
-        throw new Error(data.error)
-      }
+      // Проверяем, это streaming или JSON
+      if (contentType?.includes('text/plain') || contentType?.includes('text/event-stream')) {
+        // Streaming response
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let fullText = ''
 
-      const botContent = data.message || 'Извините, произошла ошибка.'
-      
-      const botMessage: Message = {
-        id: `bot-${Date.now()}`,
-        role: 'assistant',
-        content: botContent,
-      }
-      setMessages((prev) => [...prev, botMessage])
+        if (!reader) throw new Error('No reader')
 
-      // Определяем следующий шаг
-      const nextStep = getNextStep(botContent)
-      setCurrentStep(nextStep)
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-      // Проверяем CTA
-      if (botContent.toLowerCase().includes('бриф') || 
-          botContent.toLowerCase().includes('консультация') ||
-          botContent.toLowerCase().includes('свяжемся')) {
-        setIsCompleted(true)
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              const text = line.slice(2).replace(/^"|"$/g, '')
+              fullText += text
+              setStreamingText(fullText)
+            }
+          }
+        }
+
+        // Добавляем финальное сообщение
+        const botMessage: Message = {
+          id: `bot-${Date.now()}`,
+          role: 'assistant',
+          content: fullText,
+        }
+        setMessages((prev) => [...prev, botMessage])
+        setStreamingText('')
+        
+        const nextStep = getNextStep(fullText)
+        setCurrentStep(nextStep)
+        
+        if (fullText.toLowerCase().includes('бриф') || 
+            fullText.toLowerCase().includes('консультация')) {
+          setIsCompleted(true)
+        }
+
+      } else {
+        // JSON response (fallback)
+        const data = await response.json()
+        const botContent = data.message || 'Извините, произошла ошибка.'
+        
+        const botMessage: Message = {
+          id: `bot-${Date.now()}`,
+          role: 'assistant',
+          content: botContent,
+        }
+        setMessages((prev) => [...prev, botMessage])
+        
+        const nextStep = getNextStep(botContent)
+        setCurrentStep(nextStep)
+        
+        if (botContent.toLowerCase().includes('бриф') || 
+            botContent.toLowerCase().includes('консультация')) {
+          setIsCompleted(true)
+        }
       }
 
     } catch (error) {
@@ -132,6 +156,7 @@ export default function AIChatDemo() {
       }])
     } finally {
       setIsLoading(false)
+      setStreamingText('')
     }
   }, [messages, isLoading, currentStep])
 
@@ -158,9 +183,7 @@ export default function AIChatDemo() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (input.trim()) {
-      sendMessage(input)
-    }
+    if (input.trim()) sendMessage(input)
   }
 
   const handleReset = () => {
@@ -173,6 +196,7 @@ export default function AIChatDemo() {
     setIsCompleted(false)
     setShowCustomInput(false)
     setInput('')
+    setStreamingText('')
   }
 
   const currentButtons = QUICK_REPLIES[currentStep] || QUICK_REPLIES.yesno
@@ -223,7 +247,18 @@ export default function AIChatDemo() {
             </motion.div>
           ))}
 
-          {isLoading && (
+          {/* Streaming message */}
+          {isLoading && streamingText && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+              <div className="bg-slate-800 text-white rounded-2xl rounded-tl-none px-4 py-2.5 text-sm leading-relaxed max-w-[90%]">
+                {streamingText}
+                <span className="inline-block w-2 h-4 ml-1 bg-indigo-400 animate-pulse" />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Loading indicator */}
+          {isLoading && !streamingText && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
               <div className="bg-slate-800 rounded-2xl rounded-tl-none px-4 py-3">
                 <div className="flex gap-1">
