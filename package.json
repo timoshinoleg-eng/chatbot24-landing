@@ -11,7 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "postinstall": "prisma generate",
+    "postinstall": "echo 'Skipping prisma generate in build'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
