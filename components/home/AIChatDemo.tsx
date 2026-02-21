@@ -57,12 +57,11 @@ export default function AIChatDemo() {
       content,
     }
     
-    // Получаем актуальные сообщения через callback-форму (исправление stale closure)
-    let currentMessages: Message[] = []
-    setMessages((prevMessages) => {
-      currentMessages = [...prevMessages, userMessage]
-      return currentMessages
-    })
+    // Получаем актуальные сообщения ДО обновления state
+    const currentMessages = [...messages, userMessage]
+    
+    // Обновляем UI
+    setMessages(currentMessages)
     
     setInput('')
     setShowCustomInput(false)
