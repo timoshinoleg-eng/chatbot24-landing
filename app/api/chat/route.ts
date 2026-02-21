@@ -26,6 +26,11 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
+    // Логируем входящие сообщения для отладки
+    console.log('=== API Received Messages ===');
+    console.log('Count:', messages?.length || 0);
+    console.log('Messages:', JSON.stringify(messages?.map((m: {role: string, content: string}) => ({ role: m.role, content: m.content.substring(0, 50) }))));
+
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'Messages required' }), {
         status: 400,
