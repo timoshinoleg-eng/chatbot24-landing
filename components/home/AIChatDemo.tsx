@@ -61,23 +61,13 @@ export default function AIChatDemo() {
 
       const botContent = data.message || 'Извините, произошла ошибка.'
       
-      // Разбиваем длинное сообщение на части
-      const parts = splitMessage(botContent)
-      
-      for (let i = 0; i < parts.length; i++) {
-        const botMessage: Message = {
-          id: `bot-${Date.now()}-${i}`,
-          role: 'assistant',
-          content: parts[i],
-        }
-        
-        if (i === 0) {
-          setMessages((prev) => [...prev, botMessage])
-        } else {
-          await delay(600)
-          setMessages((prev) => [...prev, botMessage])
-        }
+      // Просто добавляем одно сообщение
+      const botMessage: Message = {
+        id: `bot-${Date.now()}`,
+        role: 'assistant',
+        content: botContent,
       }
+      setMessages((prev) => [...prev, botMessage])
 
       checkCTA(content, botContent)
 
@@ -92,29 +82,6 @@ export default function AIChatDemo() {
       setIsLoading(false)
     }
   }, [messages, isLoading])
-
-  // Разбивает сообщение на части по ~180 символов
-  const splitMessage = (text: string): string[] => {
-    if (text.length <= 180) return [text]
-    
-    const parts: string[] = []
-    const sentences = text.split(/(?<=[.!?])\s+/)
-    let current = ''
-    
-    for (const sentence of sentences) {
-      if ((current + sentence).length <= 180) {
-        current += sentence + ' '
-      } else {
-        if (current.trim()) parts.push(current.trim())
-        current = sentence + ' '
-      }
-    }
-    
-    if (current.trim()) parts.push(current.trim())
-    return parts.length > 0 ? parts : [text.slice(0, 180)]
-  }
-
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
   const checkCTA = (userContent: string, botContent: string) => {
     const lowerUser = userContent.toLowerCase()
