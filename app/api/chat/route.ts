@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         ...messages,
       ],
       temperature: 0.7,
-      maxTokens: 200,
+      maxOutputTokens: 200,
     });
 
     console.log('API response:', result.text.substring(0, 50));
