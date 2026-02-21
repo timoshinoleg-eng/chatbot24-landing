@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { readStreamableValue } from 'ai/rsc'
 
 interface Message {
   id: string
@@ -21,36 +20,18 @@ export default function AIChatDemo() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
-  const [streamingContent, setStreamingContent] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Автоскролл вниз при новых сообщениях
+  // Автоскролл вниз
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [messages, streamingContent, isLoading])
-
-  // Очистка при размонтировании
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-    }
-  }, [])
+  }, [messages, isLoading])
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return
 
-    // Отменяем предыдущий запрос если есть
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    abortControllerRef.current = new AbortController()
-
-    // Добавляем сообщение пользователя
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
@@ -59,7 +40,6 @@ export default function AIChatDemo() {
     setMessages((prev) => [...prev, userMessage])
     setInput('')
     setIsLoading(true)
-    setStreamingContent('')
 
     try {
       const response = await fetch('/api/chat', {
@@ -71,162 +51,80 @@ export default function AIChatDemo() {
             content: m.content,
           })),
         }),
-        signal: abortControllerRef.current.signal,
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const contentType = response.headers.get('content-type')
+      const data = await response.json()
       
-      // Проверяем, это streaming или JSON
-      if (contentType?.includes('text/plain') || contentType?.includes('text/event-stream')) {
-        // Streaming response
-        const reader = response.body?.getReader()
-        const decoder = new TextDecoder()
-        let fullContent = ''
-
-        if (!reader) {
-          throw new Error('No reader available')
-        }
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
-
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              // Это текстовая часть
-              const text = line.slice(2).replace(/^"|"$/g, '')
-              fullContent += text
-              setStreamingContent(fullContent)
-            }
-          }
-        }
-
-        // Разбиваем длинное сообщение на части
-        const messageParts = splitLongMessage(fullContent)
-        
-        // Добавляем части с небольшой задержкой
-        for (let i = 0; i < messageParts.length; i++) {
-          const part = messageParts[i]
-          const botMessage: Message = {
-            id: `bot-${Date.now()}-${i}`,
-            role: 'assistant',
-            content: part,
-          }
-          
-          if (i === 0) {
-            setMessages((prev) => [...prev, botMessage])
-          } else {
-            // Задержка между сообщениями
-            await new Promise(resolve => setTimeout(resolve, 800))
-            setMessages((prev) => [...prev, botMessage])
-          }
-        }
-        
-        setStreamingContent('')
-
-        // Проверяем CTA по полному сообщению
-        checkCTA(content, fullContent)
-
-      } else {
-        // JSON response (fallback)
-        const data = await response.json()
-        
-        if (data.error) {
-          throw new Error(data.error)
-        }
-
-        const botContent = data.message || data.content || 'Извините, произошла ошибка.'
-        
-        // Разбиваем длинное сообщение на части
-        const messageParts = splitLongMessage(botContent)
-        
-        for (let i = 0; i < messageParts.length; i++) {
-          const part = messageParts[i]
-          const botMessage: Message = {
-            id: `bot-${Date.now()}-${i}`,
-            role: 'assistant',
-            content: part,
-          }
-          
-          if (i === 0) {
-            setMessages((prev) => [...prev, botMessage])
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 800))
-            setMessages((prev) => [...prev, botMessage])
-          }
-        }
-
-        checkCTA(content, botContent)
+      if (data.error) {
+        throw new Error(data.error)
       }
+
+      const botContent = data.message || 'Извините, произошла ошибка.'
+      
+      // Разбиваем длинное сообщение на части
+      const parts = splitMessage(botContent)
+      
+      for (let i = 0; i < parts.length; i++) {
+        const botMessage: Message = {
+          id: `bot-${Date.now()}-${i}`,
+          role: 'assistant',
+          content: parts[i],
+        }
+        
+        if (i === 0) {
+          setMessages((prev) => [...prev, botMessage])
+        } else {
+          await delay(600)
+          setMessages((prev) => [...prev, botMessage])
+        }
+      }
+
+      checkCTA(content, botContent)
 
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return // Пользователь отменил
-      }
-      
       console.error('Chat error:', error)
-      const errorMessage: Message = {
+      setMessages((prev) => [...prev, {
         id: `bot-${Date.now()}`,
         role: 'assistant',
-        content: 'Извините, произошла ошибка соединения. Попробуйте позже или свяжитесь с нами напрямую.',
-      }
-      setMessages((prev) => [...prev, errorMessage])
+        content: 'Извините, произошла ошибка. Попробуйте позже.',
+      }])
     } finally {
       setIsLoading(false)
-      setStreamingContent('')
-      abortControllerRef.current = null
     }
   }, [messages, isLoading])
+
+  // Разбивает сообщение на части по ~180 символов
+  const splitMessage = (text: string): string[] => {
+    if (text.length <= 180) return [text]
+    
+    const parts: string[] = []
+    const sentences = text.split(/(?<=[.!?])\s+/)
+    let current = ''
+    
+    for (const sentence of sentences) {
+      if ((current + sentence).length <= 180) {
+        current += sentence + ' '
+      } else {
+        if (current.trim()) parts.push(current.trim())
+        current = sentence + ' '
+      }
+    }
+    
+    if (current.trim()) parts.push(current.trim())
+    return parts.length > 0 ? parts : [text.slice(0, 180)]
+  }
+
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
   const checkCTA = (userContent: string, botContent: string) => {
     const lowerUser = userContent.toLowerCase()
     const lowerBot = botContent.toLowerCase()
     
-    if (lowerUser.includes('бриф') || 
-        lowerUser.includes('консультация') ||
-        lowerUser.includes('демо') ||
-        lowerBot.includes('бриф') ||
-        lowerBot.includes('заполнить') ||
-        lowerBot.includes('свяжемся')) {
+    if (lowerUser.includes('бриф') || lowerUser.includes('консультация') ||
+        lowerUser.includes('демо') || lowerBot.includes('бриф') ||
+        lowerBot.includes('заполнить') || lowerBot.includes('свяжемся')) {
       setIsCompleted(true)
     }
-  }
-
-  // Разбивает длинный текст на несколько сообщений
-  const splitLongMessage = (text: string): string[] => {
-    const maxLength = 200 // Максимальная длина одного сообщения
-    
-    if (text.length <= maxLength) return [text]
-    
-    const parts: string[] = []
-    let currentPart = ''
-    
-    // Разбиваем по предложениям
-    const sentences = text.split(/(?<=[.!?])\s+/)
-    
-    for (const sentence of sentences) {
-      if ((currentPart + sentence).length <= maxLength) {
-        currentPart += sentence + ' '
-      } else {
-        if (currentPart.trim()) {
-          parts.push(currentPart.trim())
-        }
-        currentPart = sentence + ' '
-      }
-    }
-    
-    if (currentPart.trim()) {
-      parts.push(currentPart.trim())
-    }
-    
-    return parts.length > 0 ? parts : [text.substring(0, maxLength)]
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -235,19 +133,12 @@ export default function AIChatDemo() {
   }
 
   const handleReset = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: 'Привет! 👋 За 2 минуты покажу, как не терять лиды и разгрузить отдел продаж без новых наймов. Готов?',
-      },
-    ])
+    setMessages([{
+      id: 'welcome',
+      role: 'assistant',
+      content: 'Привет! 👋 За 2 минуты покажу, как не терять лиды и разгрузить отдел продаж без новых наймов. Готов?',
+    }])
     setIsCompleted(false)
-    setStreamingContent('')
-    setIsLoading(false)
   }
 
   const handleCTA = () => {
@@ -258,7 +149,7 @@ export default function AIChatDemo() {
   }
 
   return (
-    <div className="w-full max-w-[400px] h-[550px] bg-surface rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-white/10">
+    <div className="w-full max-w-[400px] h-[550px] bg-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-white/10">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-4 flex items-center gap-3 flex-shrink-0">
         <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -274,11 +165,7 @@ export default function AIChatDemo() {
           </div>
         </div>
         {messages.length > 1 && (
-          <button
-            onClick={handleReset}
-            className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-            title="Начать заново"
-          >
+          <button onClick={handleReset} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors">
             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -287,57 +174,33 @@ export default function AIChatDemo() {
       </div>
 
       {/* Messages */}
-      <div 
-        ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-4 bg-background min-h-0"
-      >
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-950 min-h-0">
         <AnimatePresence initial={false}>
-          {messages.map((message) => (
+          {messages.map((message, index) => (
             <motion.div
               key={message.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.2, delay: index * 0.05 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div
-                className={`max-w-[90%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                  message.role === 'assistant'
-                    ? 'bg-surface border border-white/10 text-text-primary rounded-2xl rounded-tl-none'
-                    : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl rounded-tr-none'
-                }`}
-              >
+              <div className={`max-w-[90%] px-4 py-2.5 text-sm leading-relaxed ${
+                message.role === 'assistant'
+                  ? 'bg-slate-800 text-white rounded-2xl rounded-tl-none'
+                  : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl rounded-tr-none'
+              }`}>
                 {message.content}
               </div>
             </motion.div>
           ))}
 
-          {/* Streaming message */}
-          {isLoading && streamingContent && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-start"
-            >
-              <div className="max-w-[90%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap bg-surface border border-white/10 text-text-primary rounded-2xl rounded-tl-none">
-                {streamingContent}
-                <span className="inline-block w-2 h-4 ml-1 bg-indigo-500 animate-pulse" />
-              </div>
-            </motion.div>
-          )}
-
-          {/* Loading indicator (только когда нет streaming) */}
-          {isLoading && !streamingContent && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex justify-start"
-            >
-              <div className="bg-surface border border-white/10 rounded-2xl rounded-tl-none px-4 py-3">
+          {isLoading && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+              <div className="bg-slate-800 rounded-2xl rounded-tl-none px-4 py-3">
                 <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 bg-text-muted rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </motion.div>
@@ -346,7 +209,7 @@ export default function AIChatDemo() {
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-surface border-t border-white/10 flex-shrink-0">
+      <div className="p-4 bg-slate-900 border-t border-white/10 flex-shrink-0">
         {!isCompleted ? (
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <input
@@ -355,12 +218,12 @@ export default function AIChatDemo() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Напишите сообщение..."
               disabled={isLoading}
-              className="flex-1 bg-background border border-white/10 rounded-xl px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-indigo-500/50 transition-colors"
+              className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500/50"
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity flex-shrink-0"
+              className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center disabled:opacity-50 hover:opacity-90 transition-opacity"
             >
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -369,18 +232,12 @@ export default function AIChatDemo() {
           </form>
         ) : (
           <div className="text-center space-y-3">
-            <p className="text-sm text-text-secondary">Готовы обсудить детали? 👍</p>
+            <p className="text-sm text-slate-400">Готовы обсудить детали? 👍</p>
             <div className="flex gap-2">
-              <button
-                onClick={handleCTA}
-                className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90 transition-opacity"
-              >
+              <button onClick={handleCTA} className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:opacity-90">
                 Заполнить бриф
               </button>
-              <button
-                onClick={handleReset}
-                className="px-4 py-3 border border-white/10 text-text-secondary text-sm rounded-xl hover:border-indigo-500/50 transition-colors"
-              >
+              <button onClick={handleReset} className="px-4 py-3 border border-white/10 text-slate-300 text-sm rounded-xl hover:border-indigo-500/50">
                 Начать заново
               </button>
             </div>
