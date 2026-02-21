@@ -31,14 +31,13 @@ export default function AIChatDemo() {
   const [isCompleted, setIsCompleted] = useState(false)
   const [currentStep, setCurrentStep] = useState<keyof typeof QUICK_REPLIES>('welcome')
   const [showCustomInput, setShowCustomInput] = useState(false)
-  const [streamingText, setStreamingText] = useState('')
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [messages, streamingText, isLoading])
+  }, [messages, isLoading])
 
   const getNextStep = (text: string): keyof typeof QUICK_REPLIES => {
     if (currentStep === 'welcome' || currentStep === 'niche') return 'problem'
@@ -51,18 +50,16 @@ export default function AIChatDemo() {
   const sendMessage = useCallback(async (content: string, skipApi = false) => {
     if (!content.trim() || isLoading) return
 
-    // Создаём новое сообщение пользователя
+    // Создаём сообщение пользователя
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
       content,
     }
     
-    // Обновляем состояние и получаем актуальный список сообщений
-    const updatedMessages: Message[] = []
+    // Обновляем UI
     setMessages((prev) => {
       const newMessages = [...prev, userMessage]
-      updatedMessages.push(...newMessages)
       return newMessages
     })
     
@@ -70,95 +67,46 @@ export default function AIChatDemo() {
     setShowCustomInput(false)
     
     if (skipApi) {
-      const nextStep = getNextStep(content)
-      setCurrentStep(nextStep)
+      setCurrentStep('niche')
       if (content === 'Другое') setShowCustomInput(true)
       return
     }
 
     setIsLoading(true)
-    setStreamingText('')
 
     try {
-      // Используем актуальный список сообщений
-      const messagesForApi = updatedMessages.length > 0 
-        ? updatedMessages 
-        : [...messages, userMessage]
+      // Ждём обновления state и берём актуальные сообщения
+      const currentMessages = [...messages, userMessage]
       
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: messagesForApi.map(m => ({
+          messages: currentMessages.map(m => ({
             role: m.role,
             content: m.content,
           })),
         }),
       })
 
-      const contentType = response.headers.get('content-type')
+      const data = await response.json()
+      const botContent = data.message || 'Извините, произошла ошибка.'
       
-      // Проверяем, это streaming или JSON
-      if (contentType?.includes('text/plain') || contentType?.includes('text/event-stream')) {
-        // Streaming response
-        const reader = response.body?.getReader()
-        const decoder = new TextDecoder()
-        let fullText = ''
-
-        if (!reader) throw new Error('No reader')
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
-
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              const text = line.slice(2).replace(/^"|"$/g, '')
-              fullText += text
-              setStreamingText(fullText)
-            }
-          }
-        }
-
-        // Добавляем финальное сообщение
-        const botMessage: Message = {
-          id: `bot-${Date.now()}`,
-          role: 'assistant',
-          content: fullText,
-        }
-        setMessages((prev) => [...prev, botMessage])
-        setStreamingText('')
-        
-        const nextStep = getNextStep(fullText)
-        setCurrentStep(nextStep)
-        
-        if (fullText.toLowerCase().includes('бриф') || 
-            fullText.toLowerCase().includes('консультация')) {
-          setIsCompleted(true)
-        }
-
-      } else {
-        // JSON response (fallback)
-        const data = await response.json()
-        const botContent = data.message || 'Извините, произошла ошибка.'
-        
-        const botMessage: Message = {
-          id: `bot-${Date.now()}`,
-          role: 'assistant',
-          content: botContent,
-        }
-        setMessages((prev) => [...prev, botMessage])
-        
-        const nextStep = getNextStep(botContent)
-        setCurrentStep(nextStep)
-        
-        if (botContent.toLowerCase().includes('бриф') || 
-            botContent.toLowerCase().includes('консультация')) {
-          setIsCompleted(true)
-        }
+      // Добавляем ответ бота
+      setMessages((prev) => [...prev, {
+        id: `bot-${Date.now()}`,
+        role: 'assistant',
+        content: botContent,
+      }])
+      
+      // Обновляем шаг
+      const nextStep = getNextStep(botContent)
+      setCurrentStep(nextStep)
+      
+      // Проверяем CTA
+      if (botContent.toLowerCase().includes('бриф') || 
+          botContent.toLowerCase().includes('консультация')) {
+        setIsCompleted(true)
       }
 
     } catch (error) {
@@ -170,13 +118,11 @@ export default function AIChatDemo() {
       }])
     } finally {
       setIsLoading(false)
-      setStreamingText('')
     }
   }, [messages, isLoading, currentStep])
 
   const handleQuickReply = useCallback((reply: string) => {
     if (reply === 'Другое') {
-      // Добавляем сообщение пользователя и показываем поле ввода
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -191,7 +137,6 @@ export default function AIChatDemo() {
         document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })
       }, 300)
     } else if (reply === 'Позвоните мне' || reply === 'Написать в Telegram') {
-      // Добавляем сообщение пользователя и ответ бота атомарно
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -225,7 +170,6 @@ export default function AIChatDemo() {
     setIsCompleted(false)
     setShowCustomInput(false)
     setInput('')
-    setStreamingText('')
   }
 
   const currentButtons = QUICK_REPLIES[currentStep] || QUICK_REPLIES.yesno
@@ -276,18 +220,7 @@ export default function AIChatDemo() {
             </motion.div>
           ))}
 
-          {/* Streaming message */}
-          {isLoading && streamingText && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-              <div className="bg-slate-800 text-white rounded-2xl rounded-tl-none px-4 py-2.5 text-sm leading-relaxed max-w-[90%]">
-                {streamingText}
-                <span className="inline-block w-2 h-4 ml-1 bg-indigo-400 animate-pulse" />
-              </div>
-            </motion.div>
-          )}
-
-          {/* Loading indicator */}
-          {isLoading && !streamingText && (
+          {isLoading && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
               <div className="bg-slate-800 rounded-2xl rounded-tl-none px-4 py-3">
                 <div className="flex gap-1">
