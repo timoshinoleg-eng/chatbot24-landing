@@ -13,17 +13,7 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент ChatBot24.su, продаю
 - Лёгкий юмор, но серьёзность
 - Не дави, показывай выгоды`;
 
-// Бесплатные модели OpenRouter
-const FREE_MODELS = [
-  'openrouter/free',  // Автовыбор бесплатной модели
-  'google/gemma-3-4b-it:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-];
-
 export async function POST(request: NextRequest) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000); // 8 секунд таймаут
-
   try {
     const body = await request.json();
     const { messages } = body;
@@ -41,7 +31,8 @@ export async function POST(request: NextRequest) {
 
     console.log('Sending request to OpenRouter...');
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    // Используем Promise.race для таймаута вместо AbortController
+    const fetchPromise = fetch(OPENROUTER_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,10 +49,13 @@ export async function POST(request: NextRequest) {
         temperature: 0.7,
         max_tokens: 300,
       }),
-      signal: controller.signal,
     });
 
-    clearTimeout(timeout);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout')), 10000);
+    });
+
+    const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
 
     if (!response.ok) {
       const error = await response.text();
@@ -83,10 +77,9 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    clearTimeout(timeout);
     console.error('Error:', error);
     
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (error instanceof Error && error.message === 'Timeout') {
       return fallbackResponse('Request timeout');
     }
     
