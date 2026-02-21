@@ -51,12 +51,21 @@ export default function AIChatDemo() {
   const sendMessage = useCallback(async (content: string, skipApi = false) => {
     if (!content.trim() || isLoading) return
 
+    // Создаём новое сообщение пользователя
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
       content,
     }
-    setMessages((prev) => [...prev, userMessage])
+    
+    // Обновляем состояние и получаем актуальный список сообщений
+    const updatedMessages: Message[] = []
+    setMessages((prev) => {
+      const newMessages = [...prev, userMessage]
+      updatedMessages.push(...newMessages)
+      return newMessages
+    })
+    
     setInput('')
     setShowCustomInput(false)
     
@@ -71,11 +80,16 @@ export default function AIChatDemo() {
     setStreamingText('')
 
     try {
+      // Используем актуальный список сообщений
+      const messagesForApi = updatedMessages.length > 0 
+        ? updatedMessages 
+        : [...messages, userMessage]
+      
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map(m => ({
+          messages: messagesForApi.map(m => ({
             role: m.role,
             content: m.content,
           })),
