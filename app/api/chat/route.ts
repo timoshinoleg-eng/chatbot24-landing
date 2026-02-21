@@ -47,9 +47,9 @@ export async function POST(req: Request) {
       });
     }
 
-    // Используем generateText вместо streamText — стабильнее
+    // Используем GPT-4o mini — недорогая, но умная модель
     const result = await generateText({
-      model: openrouter('deepseek/deepseek-r1-0528:free'),
+      model: openrouter('openai/gpt-4o-mini'),
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages,
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     return Response.json({
       success: true,
       message: result.text,
-      model: 'deepseek/deepseek-r1-0528:free',
+      model: 'openai/gpt-4o-mini',
     });
 
   } catch (error) {
