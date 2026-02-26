@@ -23,13 +23,5 @@
       "src": "/(.*)",
       "dest": "/website/dist/$1"
     }
-  ],
-  "env": {
-    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token",
-    "TELEGRAM_ADMIN_ID": "@telegram_admin_id",
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_KEY": "@supabase_key",
-    "NEXT_PUBLIC_YM_COUNTER_ID": "@ym_counter_id",
-    "NEXT_PUBLIC_GA4_ID": "@ga4_id"
-  }
+  ]
 }
