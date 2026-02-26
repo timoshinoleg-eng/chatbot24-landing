@@ -4,14 +4,11 @@
   "description": "ChatBot24 Studio - Landing page v3.0 (CRO optimized)",
   "main": "index.html",
   "scripts": {
-    "dev": "vercel dev",
     "build": "echo 'Static site - no build needed'",
-    "start": "vercel dev"
+    "start": "npx serve ."
   },
   "dependencies": {},
-  "devDependencies": {
-    "vercel": "^32.0.0"
-  },
+  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
   }
