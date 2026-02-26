@@ -395,21 +395,25 @@ ${formData.comment || 'Нет'}
                 `.trim();
 
                 // Send to Telegram via serverless API
-                fetch('/api/send-telegram', {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Отправка...';
+                
+                fetch('/api/send-brief', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: formData.name,
-                        phone: formData.phone,
-                        email: formData.email,
-                        message: formData.comment
-                    })
+                    body: JSON.stringify(formData)
                 }).then(response => {
                     if (!response.ok) {
                         console.error('Failed to send to Telegram');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+                        alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
                     }
                 }).catch(err => {
                     console.error('Error:', err);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+                    alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
                 });
                 
                 // Show success message and scroll to top
