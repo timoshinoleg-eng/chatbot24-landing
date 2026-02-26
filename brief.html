@@ -408,7 +408,8 @@ ${formData.comment || 'Нет'}
                         console.error('Failed to send to Telegram:', data);
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
-                        alert('Ошибка: ' + (data.details || data.error || 'Неизвестная ошибка'));
+                        const errorMsg = typeof data.details === 'object' ? JSON.stringify(data.details) : (data.details || data.error || 'Неизвестная ошибка');
+                        alert('Ошибка: ' + errorMsg);
                     } else {
                         // Show success message and scroll to top
                         briefForm.style.display = 'none';
