@@ -125,7 +125,8 @@ ${comment ? `<b>💬 Комментарий:</b> ${escapeHtml(comment)}` : ''}
         console.error('API error:', error);
         return res.status(500).json({
             error: 'Internal server error',
-            details: error.message
+            details: error.message,
+            stack: error.stack
         });
     }
 }
