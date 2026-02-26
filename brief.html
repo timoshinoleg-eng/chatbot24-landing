@@ -402,12 +402,13 @@ ${formData.comment || 'Нет'}
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
-                }).then(response => {
+                }).then(async response => {
+                    const data = await response.json();
                     if (!response.ok) {
-                        console.error('Failed to send to Telegram');
+                        console.error('Failed to send to Telegram:', data);
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
-                        alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
+                        alert('Ошибка: ' + (data.details || data.error || 'Неизвестная ошибка'));
                     } else {
                         // Show success message and scroll to top
                         briefForm.style.display = 'none';
@@ -418,7 +419,7 @@ ${formData.comment || 'Нет'}
                     console.error('Error:', err);
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
-                    alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
+                    alert('Ошибка отправки: ' + err.message);
                 });
             });
         }
