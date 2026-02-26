@@ -3,7 +3,7 @@
  * Send brief form data to Telegram group
  */
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -128,7 +128,7 @@ ${comment ? `<b>💬 Комментарий:</b> ${escapeHtml(comment)}` : ''}
             details: error.message
         });
     }
-};
+}
 
 function escapeHtml(text) {
     if (!text) return '';
@@ -139,3 +139,11 @@ function escapeHtml(text) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '1mb'
+        }
+    }
+};

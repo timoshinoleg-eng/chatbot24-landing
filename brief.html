@@ -408,6 +408,11 @@ ${formData.comment || 'Нет'}
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
                         alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
+                    } else {
+                        // Show success message and scroll to top
+                        briefForm.style.display = 'none';
+                        successMessage.classList.add('active');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
                     }
                 }).catch(err => {
                     console.error('Error:', err);
@@ -415,11 +420,6 @@ ${formData.comment || 'Нет'}
                     submitBtn.innerHTML = 'Отправить бриф <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
                     alert('Ошибка отправки. Попробуйте еще раз или свяжитесь с нами напрямую.');
                 });
-                
-                // Show success message and scroll to top
-                briefForm.style.display = 'none';
-                successMessage.classList.add('active');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
     </script>
