@@ -27,7 +27,7 @@
         A: {
             firstQuestion: 'Какая задача сейчас приоритетна?',
             options: [
-                { id: 'sales', text: '🛒 Больше продаж' },
+                { id: 'sales', text: '💰 Больше продаж' },
                 { id: 'automation', text: '⚙️ Автоматизация' },
                 { id: 'workload', text: '📉 Снижение нагрузки' },
                 { id: 'looking', text: '👀 Просто смотрю' }
@@ -36,19 +36,19 @@
         B: {
             firstQuestion: 'Сколько заявок обрабатываете вручную?',
             options: [
-                { id: 'few', text: 'До 50 в месяц' },
-                { id: 'medium', text: '50–200 в месяц' },
-                { id: 'many', text: 'Более 200' },
-                { id: 'notrack', text: 'Не отслеживаю' }
+                { id: 'few', text: '📊 до 100' },
+                { id: 'medium', text: '📊 100–500' },
+                { id: 'many', text: '📊 500+' },
+                { id: 'notrack', text: '❓ Не отслеживаю' }
             ]
         },
         C: {
             firstQuestion: 'Хотите рассчитать экономию от бота?',
             options: [
-                { id: 'yes', text: 'Да, покажите расчёт' },
-                { id: 'maybe', text: 'Сначала расскажите подробнее' },
-                { id: 'demo', text: 'Хочу демо' },
-                { id: 'later', text: 'Не сейчас' }
+                { id: 'yes', text: '✅ Да, покажите расчёт' },
+                { id: 'maybe', text: '🤔 Сначала расскажите' },
+                { id: 'demo', text: '🎮 Хочу демо' },
+                { id: 'later', text: '⏰ Не сейчас' }
             ]
         }
     };
@@ -103,21 +103,10 @@
         return clientId;
     }
 
-    function createWidget() {
+    // Create widget content HTML
+    function createWidgetContent() {
         const variant = AB_VARIANTS[CONFIG.abTestVariant];
-        const widget = document.createElement('div');
-        widget.className = 'hero-widget';
-        widget.id = 'hero-widget';
-        widget.innerHTML = `
-            <div class="hero-widget-header">
-                <div class="hero-widget-avatar">
-                    <span class="hero-widget-status"></span>
-                </div>
-                <div class="hero-widget-info">
-                    <div class="hero-widget-name">ChatBot24 Assistant</div>
-                    <div class="hero-widget-status-text">Онлайн</div>
-                </div>
-            </div>
+        return `
             <div class="hero-widget-messages" id="widget-messages">
                 <div class="hero-widget-message hero-widget-message--bot">
                     <div class="hero-widget-bubble">
@@ -136,12 +125,11 @@
                 `).join('')}
             </div>
         `;
-        return widget;
     }
 
     function showTyping() {
         const typing = document.getElementById('widget-typing');
-        if (typing) typing.style.display = 'block';
+        if (typing) typing.style.display = 'flex';
     }
 
     function hideTyping() {
@@ -156,7 +144,7 @@
         const appendMessage = () => {
             const messageDiv = document.createElement('div');
             messageDiv.className = `hero-widget-message hero-widget-message--${isUser ? 'user' : 'bot'}`;
-            messageDiv.innerHTML = `<div class="hero-widget-bubble">${text}</div>`;
+            messageDiv.innerHTML = `<div class="hero-widget-bubble">${text.replace(/\n/g, '<br>')}</div>`;
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         };
@@ -213,8 +201,8 @@
             addMessage(response, false, 300);
             setTimeout(() => {
                 updateButtons([
-                    { id: 'telegram', text: '💬 Перейти в Telegram' },
-                    { id: 'cases', text: '📊 Смотреть кейсы' }
+                    { id: 'telegram', text: '🚀 Перейти в Telegram' },
+                    { id: 'cases', text: '📂 Смотреть кейсы' }
                 ]);
                 widgetState.step = 2;
             }, 100);
@@ -238,13 +226,22 @@
         document.querySelectorAll('.hero-widget-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const value = this.dataset.value;
-                widgetState.step === 1 ? handleButtonClick(value) : handleStep2Click(value);
+                if (widgetState.step === 1) {
+                    handleButtonClick(value);
+                } else {
+                    handleStep2Click(value);
+                }
             });
         });
     }
 
     function showInactivityPopup() {
         if (widgetState.interactionStarted) return;
+        
+        // Remove existing popup if any
+        const existingPopup = document.getElementById('inactivity-popup');
+        if (existingPopup) existingPopup.remove();
+        
         const popup = document.createElement('div');
         popup.className = 'hero-widget-popup';
         popup.id = 'inactivity-popup';
@@ -255,25 +252,36 @@
             </div>
         `;
         document.body.appendChild(popup);
+        
         setTimeout(() => popup.classList.add('is-visible'), 10);
+        
         popup.querySelector('button').addEventListener('click', () => {
             popup.classList.remove('is-visible');
             setTimeout(() => popup.remove(), 300);
-            const widget = document.getElementById('hero-widget');
-            if (widget) {
-                widget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const container = document.getElementById('hero-widget-container');
+            if (container) {
+                container.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 trackEvent('hero_inactivity_popup_click');
             }
         });
+        
         trackEvent('hero_inactivity_popup_shown');
     }
 
     function init() {
-        const container = document.getElementById('hero-widget-container');
-        if (!container) return;
-        container.appendChild(createWidget());
+        const body = document.getElementById('hero-widget-body');
+        if (!body) {
+            console.error('Hero widget body not found');
+            return;
+        }
+        
+        // Fill the existing body with content
+        body.innerHTML = createWidgetContent();
+        
         attachButtonListeners();
+        
         widgetState.inactivityTimer = setTimeout(showInactivityPopup, CONFIG.inactivityTimeout);
+        
         trackEvent('hero_widget_view', { variant: CONFIG.abTestVariant });
     }
 
@@ -286,6 +294,11 @@
     window.ChatBot24Widget = {
         getVariant: () => CONFIG.abTestVariant,
         trackEvent: trackEvent,
-        reset: () => { widgetState.step = 1; widgetState.selectedGoal = null; widgetState.interactionStarted = false; }
+        reset: () => { 
+            widgetState.step = 1; 
+            widgetState.selectedGoal = null; 
+            widgetState.interactionStarted = false;
+            init();
+        }
     };
 })();
