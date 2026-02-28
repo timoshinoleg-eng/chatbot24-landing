@@ -368,3 +368,42 @@ h3 { font-size: clamp(24px, 3vw, 32px); }
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 }
+
+/* Mobile Menu - скрыто по умолчанию на десктопе */
+.mobile-menu {
+  display: none;
+}
+
+/* Показываем мобильное меню только на мобильных */
+@media (max-width: 768px) {
+  .nav {
+    display: none;
+  }
+  
+  .mobile-menu {
+    display: block;
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--color-bg-primary);
+    padding: 24px;
+    z-index: 999;
+  }
+  
+  .mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .mobile-nav-link {
+    color: var(--color-text-primary);
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: 500;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
